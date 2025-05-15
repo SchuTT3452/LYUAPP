@@ -1,214 +1,42 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <title>Заявка на заказ</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #f7f7f7; }
-    .container { max-width: 480px; margin: 0 auto; padding: 16px; background: #fff; min-height: 100vh; }
-    h2 { text-align: center; }
-    .hidden { display: none; }
-    input, button, select, textarea {
-      width: 100%; margin: 8px 0; padding: 12px; font-size: 1em; border-radius: 6px; border: 1px solid #ccc;
-      box-sizing: border-box;
+// Список товаров
+var PRODUCTS = [
+  "Абрикос солод", "Алоэ полынь", "Ананас лемонграсс", "Апельсин ваниль", "Бамбук юдзу",
+  "Берёзовый эль липа и мята", "Вишня шисо", "Ежевика гранат", "Жасмин бузина", "Имбирь вербена",
+  "Инжирный лист чабрец", "Кактус ренет", "Кислый", "Клюква левзея", "Ладан кокос", "Малина пан",
+  "Манго маракуйя", "Мате виноград", "Облепиха Личи", "Пало Санто банан", "Персик молочный улун",
+  "Помело ромашка", "Слива рислинг", "Смородина вереск", "Миндаль шафран", "Фейхоа иланг иланг",
+  "Фуджи сакура", "Черёмуха личи кардамон", "Черника лаванда", "Яблоко Саган дайля"
+];
+
+// Главная функция — HTML страница
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('index')
+    .setTitle('Заказ товаров');
+}
+
+// Получить список товаров
+function getProducts() {
+  return PRODUCTS;
+}
+
+// Проверка логина и пароля
+function checkLogin(login, password) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Пользователи');
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] == login && data[i][1] == password) {
+      return {success: true, name: data[i][2], company: data[i][3]};
     }
-    button { background: #2a8cff; color: #fff; border: none; cursor: pointer; }
-    button:active { background: #1761a0; }
-    .assortment-list { max-height: 220px; overflow-y: auto; margin-bottom: 12px; }
-    .assortment-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
-    .cart-list { margin: 12px 0; }
-    .cart-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #eee; }
-    .cart-total { font-weight: bold; text-align: right; margin: 12px 0; }
-    .top-bar { background: #2a8cff; color: #fff; padding: 10px; text-align: center; border-radius: 0 0 8px 8px; margin-bottom: 16px; }
-    @media (max-width: 600px) {
-      .container { padding: 8px; }
-      input, button, select, textarea { font-size: 1em; padding: 10px; }
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div id="login-section">
-      <h2>Вход</h2>
-      <input type="text" id="login" placeholder="Логин" autocomplete="username">
-      <input type="password" id="password" placeholder="Пароль" autocomplete="current-password">
-      <button onclick="login()">Войти</button>
-      <div id="login-error" style="color:red; text-align:center;"></div>
-    </div>
+  }
+  return {success: false};
+}
 
-    <div id="order-section" class="hidden">
-      <div class="top-bar">
-        <span id="user-info"></span>
-      </div>
-      <h2>Создать заявку</h2>
-      <div class="assortment-list" id="assortment-list"></div>
-      <button onclick="showCart()">Корзина (<span id="cart-count">0</span>)</button>
-    </div>
-
-    <div id="cart-section" class="hidden">
-      <div class="top-bar">
-        <span id="user-info-cart"></span>
-      </div>
-      <h2>Корзина</h2>
-      <div class="cart-list" id="cart-list"></div>
-      <div class="cart-total" id="cart-total"></div>
-      <button onclick="sendOrder()">Отправить заявку</button>
-      <button style="background:#ccc; color:#222; margin-top:8px;" onclick="backToOrder()">Назад к ассортименту</button>
-      <div id="order-result" style="color:green; text-align:center; margin-top:10px;"></div>
-    </div>
-  </div>
-
-  <script>
-    // Ваш URL скрипта:
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwFNw28b-BZZjl82-QXLrDQddP0UWPD2E6DI6jbyNkCodbsl24hrkgZSW3Ghe8zS60tIA/exec";
-    const PRICE = 1040;
-
-    // Ассортимент
-    const assortment = [
-      "Абрикос солод", "Алоэ полынь", "Ананас лемонграсс", "Апельсин ваниль", "Бамбук юдзу",
-      "Берёзовый эль липа и мята", "Вишня шисо", "Ежевика гранат", "Жасмин бузина", "Имбирь вербена",
-      "Инжирный лист чабрец", "Кактус ренет", "Кислый", "Клюква левзея", "Ладан кокос",
-      "Малина пан", "Манго маракуйя", "Ладан кокос", "Мате виноград", "Облепиха Личи",
-      "Пало Санто банан", "Персик молочный улун", "Помело ромашка", "Слива рислинг",
-      "Смородина вереск", "Миндаль шафран", "Фейхоа иланг иланг", "Фуджи сакура",
-      "Черёмуха личи кардамон", "Черника лаванда", "Яблоко Саган дайля"
-    ];
-
-    let user = null;
-    let cart = [];
-
-    // Авторизация
-    function login() {
-      const login = document.getElementById('login').value.trim();
-      const password = document.getElementById('password').value.trim();
-      document.getElementById('login-error').innerText = '';
-      fetch(SCRIPT_URL, {
-        method: "POST",
-        body: JSON.stringify({ action: "login", login, password }),
-        headers: { "Content-Type": "application/json" }
-      })
-      .then(r => r.json())
-      .then(res => {
-        if (res.success) {
-          user = { company: res.company, place: res.place };
-          document.getElementById('user-info').innerText = `${user.company} — ${user.place}`;
-          document.getElementById('user-info-cart').innerText = `${user.company} — ${user.place}`;
-          document.getElementById('login-section').classList.add('hidden');
-          document.getElementById('order-section').classList.remove('hidden');
-          renderAssortment();
-        } else {
-          document.getElementById('login-error').innerText = res.message || "Ошибка входа";
-        }
-      })
-      .catch(() => {
-        document.getElementById('login-error').innerText = "Ошибка соединения";
-      });
-    }
-
-    // Рендер ассортимента
-    function renderAssortment() {
-      const list = document.getElementById('assortment-list');
-      list.innerHTML = '';
-      assortment.forEach(item => {
-        const div = document.createElement('div');
-        div.className = 'assortment-item';
-        div.innerHTML = `
-          <span>${item}</span>
-          <input type="number" min="1" max="99" value="1" style="width:60px; margin:0 8px;" id="qty-${item}">
-          <button onclick="addToCart('${item}')">Добавить</button>
-        `;
-        list.appendChild(div);
-      });
-      updateCartCount();
-    }
-
-    // Добавить в корзину
-    function addToCart(item) {
-      const qty = parseInt(document.getElementById('qty-' + item).value, 10) || 1;
-      const idx = cart.findIndex(x => x.name === item);
-      if (idx >= 0) {
-        cart[idx].qty += qty;
-      } else {
-        cart.push({ name: item, qty });
-      }
-      updateCartCount();
-      document.getElementById('qty-' + item).value = 1;
-    }
-
-    function updateCartCount() {
-      document.getElementById('cart-count').innerText = cart.reduce((a, b) => a + b.qty, 0);
-    }
-
-    // Показать корзину
-    function showCart() {
-      document.getElementById('order-section').classList.add('hidden');
-      document.getElementById('cart-section').classList.remove('hidden');
-      renderCart();
-    }
-
-    // Вернуться к ассортименту
-    function backToOrder() {
-      document.getElementById('cart-section').classList.add('hidden');
-      document.getElementById('order-section').classList.remove('hidden');
-      document.getElementById('order-result').innerText = '';
-    }
-
-    // Рендер корзины
-    function renderCart() {
-      const list = document.getElementById('cart-list');
-      list.innerHTML = '';
-      cart.forEach((item, idx) => {
-        const div = document.createElement('div');
-        div.className = 'cart-item';
-        div.innerHTML = `
-          <span>${item.name} x${item.qty}</span>
-          <button style="background:#ff4d4d;" onclick="removeFromCart(${idx})">Удалить</button>
-        `;
-        list.appendChild(div);
-      });
-      document.getElementById('cart-total').innerText = "Сумма: " + (cart.reduce((sum, x) => sum + x.qty * PRICE, 0)) + " ₽";
-    }
-
-    // Удалить из корзины
-    function removeFromCart(idx) {
-      cart.splice(idx, 1);
-      renderCart();
-      updateCartCount();
-    }
-
-    // Отправить заявку
-    function sendOrder() {
-      if (!cart.length) return;
-      const orderList = cart.map(x => `${x.name} x${x.qty}`).join("; ");
-      const total = cart.reduce((sum, x) => sum + x.qty * PRICE, 0);
-      fetch(SCRIPT_URL, {
-        method: "POST",
-        body: JSON.stringify({
-          action: "order",
-          company: user.company,
-          place: user.place,
-          orderList,
-          total
-        }),
-        headers: { "Content-Type": "application/json" }
-      })
-      .then(r => r.json())
-      .then(res => {
-        if (res.success) {
-          document.getElementById('order-result').innerText = "Заявка отправлена!";
-          cart = [];
-          updateCartCount();
-          renderCart();
-          document.getElementById('cart-total').innerText = "";
-        } else {
-          document.getElementById('order-result').innerText = "Ошибка отправки";
-        }
-      })
-      .catch(() => {
-        document.getElementById('order-result').innerText = "Ошибка соединения";
-      });
-    }
-  </script>
-</body>
-</html>
+// Сохранить заявку
+function saveOrder(login, name, company, cart) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Заявки');
+  var now = new Date();
+  for (var i = 0; i < cart.length; i++) {
+    sheet.appendRow([now, login, name, company, cart[i].product, cart[i].quantity]);
+  }
+  return true;
+}
